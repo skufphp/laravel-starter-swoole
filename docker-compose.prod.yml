@@ -1,0 +1,61 @@
+services:
+  # Настройки Swoole для Production (использование образов из Registry)
+  laravel-swoole:
+    image: "${CI_REGISTRY_IMAGE}/app:${IMAGE_TAG}"
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    environment:
+      OCTANE_WORKERS: ${OCTANE_WORKERS:-8}
+      OCTANE_TASK_WORKERS: ${OCTANE_TASK_WORKERS:-4}
+      OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-500}
+    command: ["php", "artisan", "octane:start", "--server=swoole", "--host=0.0.0.0", "--port=8000", "--workers=${OCTANE_WORKERS:-8}", "--task-workers=${OCTANE_TASK_WORKERS:-4}", "--max-requests=${OCTANE_MAX_REQUESTS:-500}"]
+  # Queue Worker — обработка очередей Laravel
+  laravel-queue-sw:
+    image: "${CI_REGISTRY_IMAGE}/app:${IMAGE_TAG}"
+    container_name: laravel-queue-sw
+    restart: unless-stopped
+    working_dir: /var/www/laravel
+    env_file:
+      - .env
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600"]
+    networks:
+      - laravel-swoole-network
+    depends_on:
+      laravel-redis-sw:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan queue:monitor default --max=100 || exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+  # Scheduler — планировщик задач Laravel (cron)
+  laravel-scheduler-sw:
+    image: "${CI_REGISTRY_IMAGE}/app:${IMAGE_TAG}"
+    container_name: laravel-scheduler-sw
+    restart: unless-stopped
+    working_dir: /var/www/laravel
+    env_file:
+      - .env
+    command: ["sh", "-c", "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"]
+    networks:
+      - laravel-swoole-network
+    depends_on:
+      laravel-postgres-sw:
+        condition: service_healthy
+  # Сервис для автоматического запуска миграций при деплое
+  migrate:
+    image: "${CI_REGISTRY_IMAGE}/app:${IMAGE_TAG}"
+    restart: "no"
+    working_dir: /var/www/laravel
+    env_file:
+      - .env
+    command: ["sh", "-lc", "php artisan migrate --force"]
+    depends_on:
+      laravel-postgres-sw:
+        condition: service_healthy
+    networks:
+      - laravel-swoole-network

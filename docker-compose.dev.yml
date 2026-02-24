@@ -1,0 +1,70 @@
+services:
+  # Настройки Swoole для разработки (монтирование кода)
+  laravel-swoole:
+    build:
+      args:
+        INSTALL_XDEBUG: "true"
+    volumes:
+      - .:/var/www/laravel
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      OCTANE_WORKERS: ${OCTANE_WORKERS:-2}
+      OCTANE_TASK_WORKERS: ${OCTANE_TASK_WORKERS:-2}
+      OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-250}
+    command: ["php", "artisan", "octane:start", "--server=swoole", "--host=0.0.0.0", "--port=8000", "--watch"]
+    depends_on:
+      - laravel-node-sw
+  # Node.js для сборки фронтенда и Hot Module Replacement (HMR)
+  laravel-node-sw:
+    image: node:24-alpine
+    container_name: laravel-node-sw
+    working_dir: /var/www/laravel
+    volumes:
+      - .:/var/www/laravel
+      - node_modules:/var/www/laravel/node_modules
+    command: >
+      sh -lc '
+        # Установка зависимостей, если они отсутствуют
+        if [ -f package-lock.json ]; then
+          npm ci;
+        else
+          npm install;
+        fi;
+        # Запуск Vite в режиме разработки
+        npm run dev -- --host 0.0.0.0 --port 5173
+      '
+    ports:
+      - "5173:5173"
+    networks:
+      - laravel-swoole-network
+  # Только для разработки: проброс портов PostgreSQL и Redis наружу
+  laravel-postgres-sw:
+    ports:
+      - "${DB_FORWARD_PORT:-5432}:5432"
+  laravel-redis-sw:
+    ports:
+      - "${REDIS_FORWARD_PORT:-6379}:6379"
+  # Только для разработки: интерфейс управления БД (pgAdmin)
+  laravel-pgadmin-sw:
+    image: dpage/pgadmin4:latest
+    container_name: laravel-pgadmin-sw
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "${PGADMIN_PORT:-8080}:80"
+    networks:
+      - laravel-swoole-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      laravel-postgres-sw:
+        condition: service_healthy
+volumes:
+  node_modules:
