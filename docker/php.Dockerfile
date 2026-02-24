@@ -1,5 +1,5 @@
 # ==============================================================================
-# Многоэтапный образ PHP + Swoole — PHP 8.4 Alpine (Laravel Octane)
+# Многоэтапный образ PHP + Swoole — PHP 8.5 Alpine (Laravel Octane)
 # ==============================================================================
 # Назначение:
 # - Сборка фронтенда (Node.js)
@@ -25,7 +25,7 @@ RUN npm run build
 # ==============================================================================
 # Базовая среда PHP с Swoole — используется для разработки и как основа для продакшена
 # ==============================================================================
-FROM php:8.4-cli-alpine AS php-base
+FROM phpswoole/swoole:php8.5-alpine AS php-base
 
 # 1) Зависимости времени выполнения + Зависимости для сборки (удалим после компиляции)
 RUN set -eux; \
@@ -55,12 +55,7 @@ RUN set -eux; \
       sockets \
       pcntl
 
-# 3) Установка Swoole через PECL
-RUN set -eux; \
-    pecl install swoole; \
-    docker-php-ext-enable swoole
-
-# 4) PIE (PHP Installer for Extensions) + Xdebug (только для разработки)
+# 3) PIE (PHP Installer for Extensions) + Xdebug (только для разработки)
 COPY --from=ghcr.io/php/pie:bin /pie /usr/bin/pie
 
 ARG INSTALL_XDEBUG=false

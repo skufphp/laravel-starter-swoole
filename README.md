@@ -60,18 +60,17 @@ Boilerplate для быстрого развертывания **Laravel Octane*
 ```bash
 # 1. Создайте Laravel проект
 composer create-project laravel/laravel my-app
-
-# 2. Скопируйте файлы boilerplate в проект
-# (docker/, docker-compose*.yml, Makefile, .dockerignore)
-
-# 3. Установите Laravel Octane
 cd my-app
+
+# 2. Добавить Octane в зависимости (локально Swoole не нужен)
 composer require laravel/octane
-php artisan octane:install --server=swoole
+
+# 3. Скопируйте файлы boilerplate в проект
+# (docker/, docker-compose*.yml, Makefile, .dockerignore)
 
 # 4. Настройте .env (см. SETUP.md)
 
-# 5. Запустите
+# 5. Запустить — всё остальное сделает init-job внутри контейнера
 make setup
 ```
 

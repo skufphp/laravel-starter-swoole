@@ -20,6 +20,7 @@ POSTGRES_SERVICE=laravel-postgres-sw
 REDIS_SERVICE=laravel-redis-sw
 PGADMIN_SERVICE=laravel-pgadmin-sw
 NODE_SERVICE=laravel-node-sw
+INIT_SERVICE=laravel-init
 
 help: ## Показать справку
 	@echo "$(YELLOW)Laravel Octane + Swoole Docker Boilerplate$(NC)"
@@ -95,18 +96,28 @@ shell-redis: ## Подключиться к Redis CLI
 
 # --- Команды Laravel ---
 
-setup: ## Полная инициализация проекта с нуля
+setup: check-files ## Полная инициализация проекта с нуля (build → infra → init → app)
+	@echo "$(YELLOW)1/5 Сборка образов...$(NC)"
 	@make build
-	@make up
-	@echo "$(YELLOW)Ожидание готовности PostgreSQL...$(NC)"
+	@echo "$(YELLOW)2/5 Запуск инфраструктуры (PostgreSQL, Redis, pgAdmin)...$(NC)"
+	@$(COMPOSE) up -d $(POSTGRES_SERVICE) $(REDIS_SERVICE) $(PGADMIN_SERVICE)
+	@echo "$(YELLOW)3/5 Ожидание готовности сервисов...$(NC)"
 	@$(COMPOSE) exec $(POSTGRES_SERVICE) sh -c 'until pg_isready; do sleep 1; done'
-	@echo "$(YELLOW)Ожидание готовности Redis...$(NC)"
 	@$(COMPOSE) exec $(REDIS_SERVICE) sh -c 'until redis-cli ping | grep -q PONG; do sleep 1; done'
-	@make install-deps
-	@make artisan CMD="key:generate"
-	@make migrate
-	@make permissions
-	@echo "$(GREEN)✓ Проект готов: http://localhost:8000$(NC)"
+	@echo "$(YELLOW)4/5 Инициализация проекта (composer, key, migrate)...$(NC)"
+	@make init
+	@echo "$(YELLOW)5/5 Запуск приложения (Octane + Swoole) и Node (Vite)...$(NC)"
+	@$(COMPOSE) up -d $(APP_SERVICE) $(NODE_SERVICE)
+	@echo ""
+	@echo "$(GREEN)✓ Проект готов!$(NC)"
+	@echo "  • Приложение: http://localhost:8000"
+	@echo "  • pgAdmin:    http://localhost:8080"
+	@echo "  • Vite HMR:   http://localhost:5173"
+
+init: ## Инициализация проекта (composer install, key, migrate) через init-job
+	@echo "$(YELLOW)Запуск init-job...$(NC)"
+	@$(COMPOSE) run --rm $(INIT_SERVICE)
+	@echo "$(GREEN)✓ Инициализация завершена$(NC)"
 
 install-deps: ## Установка всех зависимостей (Composer + NPM)
 	@echo "$(YELLOW)Установка зависимостей...$(NC)"
