@@ -12,9 +12,53 @@ services:
       OCTANE_WORKERS: ${OCTANE_WORKERS:-2}
       OCTANE_TASK_WORKERS: ${OCTANE_TASK_WORKERS:-2}
       OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-250}
-    command: ["php", "artisan", "octane:start", "--server=swoole", "--host=0.0.0.0", "--port=8000", "--watch"]
+    command: [ "php", "artisan", "octane:start", "--server=swoole", "--host=0.0.0.0", "--port=8000" ]
     depends_on:
-      - laravel-node-sw
+      laravel-postgres-sw:
+        condition: service_healthy
+      laravel-redis-sw:
+        condition: service_healthy
+
+  # Одноразовая инициализация (composer install, key, migrate)
+  # Запускается через: make init (docker compose run --rm)
+  laravel-init:
+    build:
+      context: .
+      dockerfile: docker/php.Dockerfile
+      target: php-base
+      args:
+        INSTALL_XDEBUG: "false"
+    user: "root"
+    profiles: [ "init" ]
+    volumes:
+      - .:/var/www/laravel
+    working_dir: /var/www/laravel
+    environment:
+      OCTANE_SERVER: ${OCTANE_SERVER:-swoole}
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        set -eu
+        echo "[init] composer install..."
+        composer install --no-interaction
+        echo "[init] octane:install..."
+        php artisan octane:install --server=swoole || true
+        echo "[init] key:generate..."
+        php artisan key:generate --force
+        echo "[init] migrate..."
+        php artisan migrate --force
+        echo "[init] permissions..."
+        chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+        chmod -R ug+rwX storage bootstrap/cache 2>/dev/null || true
+        echo "[init] ✓ done"
+    depends_on:
+      laravel-postgres-sw:
+        condition: service_healthy
+      laravel-redis-sw:
+        condition: service_healthy
+    networks:
+      - laravel-swoole-network
+
   # Node.js для сборки фронтенда и Hot Module Replacement (HMR)
   laravel-node-sw:
     image: node:24-alpine
@@ -38,6 +82,7 @@ services:
       - "5173:5173"
     networks:
       - laravel-swoole-network
+
   # Только для разработки: проброс портов PostgreSQL и Redis наружу
   laravel-postgres-sw:
     ports:
@@ -45,6 +90,7 @@ services:
   laravel-redis-sw:
     ports:
       - "${REDIS_FORWARD_PORT:-6379}:6379"
+
   # Только для разработки: интерфейс управления БД (pgAdmin)
   laravel-pgadmin-sw:
     image: dpage/pgadmin4:latest
@@ -58,7 +104,7 @@ services:
     networks:
       - laravel-swoole-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/"]
+      test: [ "CMD", "wget", "-q", "-O", "-", "http://localhost/" ]
       interval: 15s
       timeout: 10s
       retries: 5

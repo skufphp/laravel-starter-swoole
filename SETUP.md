@@ -60,7 +60,6 @@ cd my-app
 
 ```bash
 composer require laravel/octane
-php artisan octane:install --server=swoole
 ```
 
 > **Примечание:** В отличие от RoadRunner, Swoole — это PHP-расширение (C-extension), а не отдельный бинарный файл. Оно уже установлено в Docker-образе из этого boilerplate. Локально устанавливать Swoole не нужно — всё работает внутри контейнера.
