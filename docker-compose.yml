@@ -4,22 +4,56 @@ services:
     build:
       context: .
       dockerfile: docker/php.Dockerfile
-      target: php-base
+      target: development
+      args:
+        INSTALL_XDEBUG: "true"
+    image: laravel-swoole:dev
     container_name: laravel-swoole
     restart: unless-stopped
     working_dir: /var/www/laravel
+    volumes:
+      - .:/var/www/laravel
+    ports:
+      - "${APP_PORT:-8050}:8000"
     environment:
-      XDEBUG_MODE: ${XDEBUG_MODE}
-      XDEBUG_START: ${XDEBUG_START}
-      XDEBUG_CLIENT_HOST: ${XDEBUG_CLIENT_HOST}
+      APP_BASE_PATH: ${APP_BASE_PATH:-/var/www/laravel}
+      XDEBUG_MODE: ${XDEBUG_MODE:-off}
+      XDEBUG_START: ${XDEBUG_START:-no}
+      XDEBUG_CLIENT_HOST: ${XDEBUG_CLIENT_HOST:-host.docker.internal}
     networks:
       - laravel-swoole-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/up"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/up" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  # Node.js для сборки фронтенда и Hot Module Replacement (HMR)
+  laravel-node-sw:
+    image: node:24-alpine
+    container_name: laravel-node-sw
+    restart: unless-stopped
+    working_dir: /var/www/laravel
+    volumes:
+      - .:/var/www/laravel
+      - node_modules:/var/www/laravel/node_modules
+    command: >
+      sh -lc '
+        # Установка зависимостей, если они отсутствуют
+        if [ -f package-lock.json ]; then
+          npm ci;
+        else
+          npm install;
+        fi;
+
+        # Запуск Vite в режиме разработки
+        npm run dev -- --host 0.0.0.0 --port 5173
+      '
+    ports:
+      - "5173:5173"
+    networks:
+      - laravel-swoole-network
 
   # База данных PostgreSQL
   laravel-postgres-sw:
@@ -31,11 +65,13 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
+    ports:
+      - "${DB_FORWARD_PORT:-5432}:5432"
     networks:
       - laravel-swoole-network
     healthcheck:
-      test: ["CMD", "pg_isready"]
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,21 +82,88 @@ services:
     image: redis:8.6-alpine
     container_name: laravel-redis-sw
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - redis-data:/data
+    ports:
+      - "${REDIS_FORWARD_PORT:-6379}:6379"
     networks:
       - laravel-swoole-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
+  # Queue Worker — обработка очередей Laravel (dev)
+  laravel-queue-sw:
+    image: laravel-swoole:dev
+    container_name: laravel-queue-sw
+    pull_policy: never
+    restart: unless-stopped
+    working_dir: /var/www/laravel
+    volumes:
+      - .:/var/www/laravel
+    command: [ "php", "artisan", "queue:work", "--sleep=1", "--tries=1" ]
+    networks:
+      - laravel-swoole-network
+    depends_on:
+      laravel-postgres-sw:
+        condition: service_healthy
+      laravel-redis-sw:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "ps aux | grep -v grep | grep 'queue:work' >/dev/null || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Scheduler — планировщик задач Laravel (dev)
+  laravel-scheduler-sw:
+    image: laravel-swoole:dev
+    container_name: laravel-scheduler-sw
+    pull_policy: never
+    restart: unless-stopped
+    working_dir: /var/www/laravel
+    volumes:
+      - .:/var/www/laravel
+    command: [ "sh", "-c", "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done" ]
+    networks:
+      - laravel-swoole-network
+    depends_on:
+      laravel-postgres-sw:
+        condition: service_healthy
+      laravel-redis-sw:
+        condition: service_healthy
+
+  # Только для разработки: интерфейс управления БД (pgAdmin)
+  laravel-pgadmin-sw:
+    image: dpage/pgadmin4:latest
+    container_name: laravel-pgadmin-sw
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "${PGADMIN_PORT:-8080}:80"
+    networks:
+      - laravel-swoole-network
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "-O", "-", "http://localhost/" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      laravel-postgres-sw:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   redis-data:
+  node_modules:
 
 networks:
   laravel-swoole-network:

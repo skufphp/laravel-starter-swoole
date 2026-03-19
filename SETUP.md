@@ -53,6 +53,9 @@
 
 ```bash
 composer create-project laravel/laravel my-app
+```
+
+```bash
 cd my-app
 ```
 
@@ -62,16 +65,17 @@ cd my-app
 composer require laravel/octane
 ```
 
-> **Примечание:** В отличие от RoadRunner, Swoole — это PHP-расширение (C-extension), а не отдельный бинарный файл. Оно уже установлено в Docker-образе из этого boilerplate. Локально устанавливать Swoole не нужно — всё работает внутри контейнера.
+> **Примечание:** Swoole — это PHP-расширение (C-extension), а не отдельный бинарный файл. Оно уже установлено в Docker-образе из этого boilerplate. Локально устанавливать Swoole не нужно — всё работает внутри контейнера.
 
 ### 3. Копирование файлов boilerplate
 
 Скопируйте следующие файлы и папки из данного boilerplate в корень вашего нового проекта Laravel:
 
 * Папку `docker/` (включая все подпапки и файлы)
-* Файлы `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.prod.yml`
+* Файлы `docker-compose.yml`, `docker-compose.prod.yml`, `docker-compose.prod.local.yml`
 * Файл `Makefile`
 * Файл `.dockerignore`
+* Файл `.env.production.example`
 
 ### 4. Настройка окружения (.env)
 
@@ -88,12 +92,17 @@ DB_USERNAME=postgres
 DB_PASSWORD=root
 ```
 
-**b) Настройте Redis:**
+**b) Настройте Redis и драйверы Laravel (обязательно для этого boilerplate):**
 
 ```dotenv
+REDIS_CLIENT=phpredis
 REDIS_HOST=laravel-redis-sw
 REDIS_PORT=6379
 REDIS_PASSWORD=
+
+SESSION_DRIVER=redis
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
 ```
 
 **c) Настройте Octane:**
@@ -110,7 +119,7 @@ PGADMIN_DEFAULT_EMAIL=admin@example.com
 PGADMIN_DEFAULT_PASSWORD=admin
 
 # --- Docker ports ---
-APP_PORT=8000
+APP_PORT=8050
 DB_FORWARD_PORT=5432
 REDIS_FORWARD_PORT=6379
 PGADMIN_PORT=8080
@@ -121,9 +130,9 @@ XDEBUG_START=no
 XDEBUG_CLIENT_HOST=host.docker.internal
 
 # --- Swoole / Octane Configuration ---
-OCTANE_WORKERS=2
-OCTANE_TASK_WORKERS=2
-OCTANE_MAX_REQUESTS=250
+SWOOLE_WORKERS=2
+SWOOLE_TASK_WORKERS=2
+SWOOLE_MAX_REQUESTS=250
 ```
 
 ### 5. Инициализация проекта
@@ -135,23 +144,23 @@ make setup
 ```
 
 После завершения:
-- **Приложение:** http://localhost:8000
+- **Приложение:** http://localhost:8050
 - **pgAdmin:** http://localhost:8080
 - **Vite HMR:** http://localhost:5173
 
-### 6. Работа с Swoole в разработке
+### 6. Работа со Swoole в разработке
 
 В dev-режиме контейнер запускается с флагом `--watch`, который автоматически перезагружает воркеры при изменении PHP-файлов. Если автоматическая перезагрузка не срабатывает, можно перезагрузить вручную:
 
 ```bash
 # Перезагрузить воркеры (быстро, без перезапуска контейнера)
-make octane-reload
+make swoole-reload
 
 # Посмотреть статус Swoole Octane
-make octane-status
+make swoole-status
 ```
 
-> **Примечание:** Флаг `--watch` требует установленного пакета `chokidar` (устанавливается автоматически через npm). Если `--watch` не работает, используйте `make octane-reload` после изменений PHP-кода.
+> **Примечание:** Флаг `--watch` требует установленного пакета `chokidar` (устанавливается автоматически через npm внутри контейнера).
 
 ### 7. Xdebug
 
@@ -173,37 +182,24 @@ make up
 
 ## 🏭 Развертывание на Production
 
-### Архитектура Production
+Этот boilerplate рассчитан на деплой через **Dokploy**.
 
-В продакшене используется **production stage** из Dockerfile — образ содержит весь код, vendor и собранные ассеты. Никаких volume-монтирований.
+### Настройка `.env.production`
 
-Дополнительные сервисы:
-- **Queue Worker** — обработка очередей Laravel
-- **Scheduler** — планировщик задач (замена cron)
-- **Migrate** — одноразовый контейнер для миграций при деплое
-
-### 1. Сборка Production-образа
+Создайте production-файл из шаблона:
 
 ```bash
-# Сборка образа с тегом
-docker build \
-  -f docker/php.Dockerfile \
-  --target production \
-  -t your-registry.com/app:latest \
-  .
-
-# Пуш в registry
-docker push your-registry.com/app:latest
+cp .env.production.example .env.production
 ```
 
-### 2. Настройка Production .env
+Проверьте и заполните в `.env.production` production-значения:
 
 ```dotenv
 APP_ENV=production
 APP_DEBUG=false
+APP_KEY=base64:your-generated-key
 APP_URL=https://your-domain.com
 
-# БД
 DB_CONNECTION=pgsql
 DB_HOST=laravel-postgres-sw
 DB_PORT=5432
@@ -211,101 +207,33 @@ DB_DATABASE=your_db
 DB_USERNAME=your_user
 DB_PASSWORD=<strong_password>
 
-# Redis
+REDIS_CLIENT=phpredis
 REDIS_HOST=laravel-redis-sw
 REDIS_PORT=6379
+REDIS_PASSWORD=
 
-# Octane
+SESSION_DRIVER=redis
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+
 OCTANE_SERVER=swoole
-
-# Swoole
-OCTANE_WORKERS=8
-OCTANE_TASK_WORKERS=4
-OCTANE_MAX_REQUESTS=500
-
-# Registry (для docker-compose.prod.yml)
-CI_REGISTRY_IMAGE=your-registry.com
-IMAGE_TAG=latest
+SWOOLE_WORKERS=8
+SWOOLE_TASK_WORKERS=4
+SWOOLE_MAX_REQUESTS=500
 ```
 
-### 3. Запуск на сервере
+`APP_DEBUG=false` обязателен для production.  
+`.env.production` не должен попадать в Git.
 
-```bash
-# Скопируйте на сервер:
-# - docker-compose.yml
-# - docker-compose.prod.yml
-# - .env (с production-настройками)
+### Деплой в Dokploy
 
-# Запуск
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+После создания проекта в Dokploy:
 
-# Миграции выполнятся автоматически через сервис migrate
-```
-
-### 4. Production Checklist
-
-- [ ] `APP_ENV=production`, `APP_DEBUG=false`
-- [ ] Сильные пароли для БД и Redis
-- [ ] `OCTANE_WORKERS` = количество ядер CPU
-- [ ] HTTPS терминируется на reverse proxy (Traefik, Caddy, Nginx) перед Swoole
-- [ ] Health check настроен: `http://app:8000/up`
-- [ ] Queue worker и Scheduler запущены
-- [ ] Бэкапы PostgreSQL настроены
-- [ ] `.env` файл **не** в Git, передаётся через CI/CD secrets
-
-### 5. CI/CD (GitLab CI пример)
-
-```yaml
-stages:
-  - build
-  - deploy
-
-build:
-  stage: build
-  image: docker:latest
-  services:
-    - docker:dind
-  script:
-    - docker build -f docker/php.Dockerfile --target production -t $CI_REGISTRY_IMAGE/app:$CI_COMMIT_SHA .
-    - docker push $CI_REGISTRY_IMAGE/app:$CI_COMMIT_SHA
-
-deploy:
-  stage: deploy
-  script:
-    - ssh deploy@server "cd /app && IMAGE_TAG=$CI_COMMIT_SHA docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
-```
-
-### 6. Reverse Proxy (HTTPS)
-
-Swoole слушает на порту 8000 (HTTP). Для HTTPS используйте reverse proxy перед ним.
-
-**Пример с Caddy (рекомендуется — автоматический HTTPS):**
-
-```
-your-domain.com {
-    reverse_proxy laravel-swoole:8000
-}
-```
-
-**Пример с Nginx:**
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name your-domain.com;
-
-    ssl_certificate /etc/ssl/cert.pem;
-    ssl_certificate_key /etc/ssl/key.pem;
-
-    location / {
-        proxy_pass http://laravel-swoole:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+1. Перейдите в раздел **Environment -> Environment Settings**.
+2. Скопируйте **все** переменные из `.env.production`.
+3. Для Preview-развертываний (если используются) измените переменные БД (например, добавьте префикс к имени БД), чтобы preview не затрагивал production-базу.
+4. В настройках развертывания укажите команду Post-deployment:
+    - `php artisan migrate --force && php artisan optimize:clear`
 
 ---
 
@@ -316,18 +244,21 @@ server {
 | `make help` | Показать справку |
 | `make setup` | Полная инициализация проекта |
 | `make up` | Запустить контейнеры (dev) |
-| `make up-prod` | Запустить контейнеры (prod) |
+| `make up-prod` | Запустить контейнеры (prod local, из `.env.production`) |
 | `make down` | Остановить контейнеры |
+| `make down-prod` | Остановить контейнеры (prod local) |
 | `make restart` | Перезапустить контейнеры |
 | `make build` | Собрать образы |
 | `make rebuild` | Пересобрать без кэша |
 | `make logs` | Логи всех сервисов |
 | `make logs-app` | Логи Swoole |
+| `make logs-queue` | Логи queue worker (dev) |
+| `make logs-scheduler` | Логи scheduler (dev) |
 | `make status` | Статус контейнеров |
 | `make shell` | Войти в контейнер приложения |
 | `make shell-postgres` | PostgreSQL CLI |
-| `make octane-reload` | Перезагрузить воркеры Swoole |
-| `make octane-status` | Статус Swoole Octane |
+| `make swoole-reload` | Перезагрузить воркеры Swoole |
+| `make swoole-status` | Статус Swoole Octane |
 | `make artisan CMD="..."` | Artisan-команда |
 | `make migrate` | Запустить миграции |
 | `make fresh` | Пересоздать БД + сиды |
