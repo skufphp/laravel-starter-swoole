@@ -239,31 +239,45 @@ SWOOLE_MAX_REQUESTS=500
 
 ## 📋 Полный список Make-команд
 
-| Команда | Описание |
-|---------|----------|
-| `make help` | Показать справку |
-| `make setup` | Полная инициализация проекта |
-| `make up` | Запустить контейнеры (dev) |
-| `make up-prod` | Запустить контейнеры (prod local, из `.env.production`) |
-| `make down` | Остановить контейнеры |
-| `make down-prod` | Остановить контейнеры (prod local) |
-| `make restart` | Перезапустить контейнеры |
-| `make build` | Собрать образы |
-| `make rebuild` | Пересобрать без кэша |
-| `make logs` | Логи всех сервисов |
-| `make logs-app` | Логи Swoole |
-| `make logs-queue` | Логи queue worker (dev) |
-| `make logs-scheduler` | Логи scheduler (dev) |
-| `make status` | Статус контейнеров |
-| `make shell` | Войти в контейнер приложения |
-| `make shell-postgres` | PostgreSQL CLI |
-| `make swoole-reload` | Перезагрузить воркеры Swoole |
-| `make swoole-status` | Статус Swoole Octane |
-| `make artisan CMD="..."` | Artisan-команда |
-| `make migrate` | Запустить миграции |
-| `make fresh` | Пересоздать БД + сиды |
-| `make test-php` | Запустить тесты |
-| `make validate` | Проверить доступность сервисов |
-| `make info` | Информация о проекте |
-| `make clean` | Удалить контейнеры и тома |
-| `make clean-all` | Полная очистка |
+| Команда                  | Описание                         |
+|--------------------------|----------------------------------|
+| `make help`              | Показать справку                 |
+| `make setup`             | Полная инициализация проекта     |
+| `make up`                | Запустить контейнеры (dev)       |
+| `make up-prod`           | Запустить контейнеры (prod local)|
+| `make down`              | Остановить контейнеры            |
+| `make down-prod`         | Остановить контейнеры (prod local)|
+| `make restart`           | Перезапустить контейнеры         |
+| `make build`             | Собрать образы                   |
+| `make rebuild`           | Пересобрать без кэша             |
+| `make logs`              | Логи всех сервисов (dev)         |
+| `make logs-prod`         | Логи всех сервисов (prod local)  |
+| `make logs-app`          | Логи Swoole                      |
+| `make logs-app-prod`     | Логи Swoole (prod local)         |
+| `make logs-postgres`     | Логи PostgreSQL (dev)            |
+| `make logs-postgres-prod`| Логи PostgreSQL (prod local)     |
+| `make logs-redis`        | Логи Redis (dev)                 |
+| `make logs-redis-prod`   | Логи Redis (prod local)          |
+| `make logs-queue`        | Логи queue worker (dev)          |
+| `make logs-queue-prod`   | Логи queue worker (prod local)   |
+| `make logs-scheduler`    | Логи scheduler (dev)             |
+| `make logs-scheduler-prod`| Логи scheduler (prod local)     |
+| `make status`            | Статус контейнеров               |
+| `make shell`             | Войти в контейнер приложения     |
+| `make shell-prod`        | Войти в app-контейнер (prod local)|
+| `make shell-postgres`    | PostgreSQL CLI (dev)             |
+| `make shell-postgres-prod`| PostgreSQL CLI (prod local)     |
+| `make shell-redis`       | Redis CLI (dev)                  |
+| `make shell-redis-prod`  | Redis CLI (prod local)           |
+| `make shell-queue-prod`  | Shell queue worker (prod local)  |
+| `make shell-scheduler-prod`| Shell scheduler (prod local)   |
+| `make swoole-reload`     | Перезагрузить воркеры Swoole     |
+| `make swoole-status`     | Статус Swoole Octane             |
+| `make artisan CMD="..."` | Artisan-команда                  |
+| `make migrate`           | Запустить миграции               |
+| `make fresh`             | Пересоздать БД + сиды            |
+| `make test-php`          | Запустить тесты                  |
+| `make validate`          | Проверить доступность сервисов   |
+| `make info`              | Информация о проекте             |
+| `make clean`             | Удалить контейнеры и тома        |
+| `make clean-all`         | Полная очистка                   |

@@ -108,10 +108,24 @@ make up-prod
 | `make logs-prod`         | Логи всех сервисов (prod local)  |
 | `make logs-app`          | Логи Swoole                      |
 | `make logs-app-prod`     | Логи Swoole (prod local)         |
+| `make logs-postgres`     | Логи PostgreSQL (dev)            |
+| `make logs-postgres-prod`| Логи PostgreSQL (prod local)     |
+| `make logs-redis`        | Логи Redis (dev)                 |
+| `make logs-redis-prod`   | Логи Redis (prod local)          |
+| `make logs-queue`        | Логи queue worker (dev)          |
+| `make logs-queue-prod`   | Логи queue worker (prod local)   |
+| `make logs-scheduler`    | Логи scheduler (dev)             |
+| `make logs-scheduler-prod`| Логи scheduler (prod local)     |
 | `make shell`             | Войти в контейнер                |
 | `make shell-prod`        | Войти в app-контейнер (prod local)|
+| `make shell-postgres`    | PostgreSQL CLI (dev)             |
+| `make shell-postgres-prod`| PostgreSQL CLI (prod local)     |
+| `make shell-redis`       | Redis CLI (dev)                  |
+| `make shell-redis-prod`  | Redis CLI (prod local)           |
+| `make shell-queue-prod`  | Shell queue worker (prod local)  |
+| `make shell-scheduler-prod`| Shell scheduler (prod local)   |
 | `make swoole-reload`     | Перезагрузить воркеры Swoole     |
-| `make swoole-status`     | Статус Swoole Octane             |
+| `make swoole-status`     | Статус воркеров                  |
 | `make artisan CMD="..."` | Выполнить artisan-команду        |
 | `make test-php`          | Запустить тесты                  |
 | `make help`              | Полный список команд             |

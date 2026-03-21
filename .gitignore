@@ -1,40 +1,49 @@
-# Laravel
+# Dependencies
 /vendor/
 /node_modules/
-/public/build/
-/public/hot/
-/public/storage
-/storage/*.key
-/storage/framework/cache/data/*
-/storage/framework/sessions/*
-/storage/framework/testing/*
-/storage/framework/views/*
-/storage/logs/*
+
+# Environment
 .env
 .env.backup
 .env.production
 !.env.docker
-.phpunit.result.cache
-Homestead.json
-Homestead.yaml
-auth.json
-npm-debug.log
-yarn-error.log
+
+# Laravel Framework
+/public/build/
+/public/hot/
+/public/storage
+/storage/*.key
+/storage/framework/cache/
+/storage/framework/sessions/
+/storage/framework/testing/
+/storage/framework/views/
+/storage/logs/
+
+# Testing
 /.phpunit.cache
-/config.php
-/public/mix-manifest.json
+.phpunit.result.cache
 
-# Docker specific
-# Если в будущем будут добавлены локальные тома для БД в корень проекта
-/docker/postgres_data/
+# IDE & Editors
+/.fleet
+/.idea/
+/.nova
+/.vscode/
+/.zed
+.phpactor.json
 
-# IDE & OS
-.idea/
-.vscode/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# OS
 .DS_Store
 Thumbs.db
+
+# Misc
+auth.json
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+
+# Docker
+/docker/postgres_data/
+
+# Claude
+.claude/
