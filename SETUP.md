@@ -1,48 +1,5 @@
 # Инструкция по установке Laravel Octane + Swoole Boilerplate
 
-Этот boilerplate предназначен для быстрого развертывания Laravel-проекта с архитектурой **Laravel Octane + Swoole + PostgreSQL + Redis + pgAdmin**.
-
-## Для каких приложений подходит эта архитектура
-
-### ✅ 1. Высоконагруженные API
-
-**Идеальный кейс для Swoole**
-
-* REST / GraphQL API с высоким RPS
-* Микросервисы
-* Real-time приложения (WebSocket через Swoole)
-
-**Почему Swoole:** Persistent workers + корутины — приложение загружается один раз и обрабатывает тысячи запросов без повторного bootstrap. Корутины Swoole позволяют выполнять асинхронный I/O (запросы к БД, HTTP-вызовы) без блокировки воркера.
-
----
-
-### ✅ 2. Blade / Livewire / Inertia приложения
-
-* Blade templates + Server-side rendering
-* Livewire
-* Inertia + Vue/React
-
-**Почему подходит:** Laravel Octane полностью совместим с Blade, Livewire и Inertia. Получаете прирост производительности без изменения кода.
-
----
-
-### ✅ 3. SaaS-панели и админки
-
-* CRM / ERP системы
-* Internal tools
-* Корпоративные порталы
-
----
-
-### ⚠️ Важно: особенности Octane
-
-При работе с Laravel Octane нужно учитывать, что **приложение живёт между запросами**:
-
-* Не храните состояние в статических свойствах классов
-* Используйте `Octane::concurrently()` для параллельных задач
-* Будьте осторожны с singleton-сервисами — они переиспользуются между запросами
-* Подробнее: [Laravel Octane Documentation](https://laravel.com/docs/octane)
-
 ---
 
 ## 🚀 Процесс установки для разработки
@@ -65,6 +22,12 @@ cd my-app
 composer require laravel/octane
 ```
 
+После установки пакета выполните публикацию конфигурации Octane:
+
+```bash
+php artisan octane:install
+```
+
 > **Примечание:** Swoole — это PHP-расширение (C-extension), а не отдельный бинарный файл. Оно уже установлено в Docker-образе из этого boilerplate. Локально устанавливать Swoole не нужно — всё работает внутри контейнера.
 
 ### 3. Копирование файлов boilerplate
@@ -75,13 +38,45 @@ composer require laravel/octane
 * Файлы `docker-compose.yml`, `docker-compose.prod.yml`, `docker-compose.prod.local.yml`
 * Файл `Makefile`
 * Файл `.dockerignore`
-* Файл `.env.production.example`
+* Файл `.gitignore`
 
 ### 4. Настройка окружения (.env)
 
-Откройте файл `.env` в корне Laravel и выполните следующие изменения:
+После `php artisan octane:install` сначала внесите изменения в `config/octane.php`, а затем продолжайте настройку `.env`.
 
-**a) Настройте подключение к БД:**
+**a) Настройте Octane в `/config/octane.php`:**
+
+1. Измените строку
+
+```php
+'server' => env('OCTANE_SERVER', 'roadrunner'),
+```
+
+на
+
+```php
+'server' => env('OCTANE_SERVER', 'swoole'),
+```
+
+2. После секции `Force HTTPS` добавьте:
+
+```php
+/*
+|--------------------------------------------------------------------------
+| Octane State File
+|--------------------------------------------------------------------------
+|
+| Octane stores process IDs and runtime server state in this file. Keeping
+| it under storage/framework avoids coupling the runtime state to log storage.
+|
+*/
+
+'state_file' => env('OCTANE_STATE_FILE', storage_path('framework/octane-server-state.json')),
+```
+
+После этого откройте файл `.env` в корне Laravel и выполните следующие изменения:
+
+**b) Настройте подключение к БД:**
 
 ```dotenv
 DB_CONNECTION=pgsql
@@ -92,28 +87,29 @@ DB_USERNAME=postgres
 DB_PASSWORD=root
 ```
 
-**b) Настройте Redis и драйверы Laravel (обязательно для этого boilerplate):**
+**c) Настройте Redis и драйверы Laravel (обязательно для этого boilerplate):**
 
 ```dotenv
 REDIS_CLIENT=phpredis
 REDIS_HOST=laravel-redis-sw
 REDIS_PORT=6379
-REDIS_PASSWORD=
+REDIS_PASSWORD=secret
 
 SESSION_DRIVER=redis
 CACHE_STORE=redis
 QUEUE_CONNECTION=redis
 ```
 
-**c) Настройте Octane:**
-
-```dotenv
-OCTANE_SERVER=swoole
-```
-
 **d) Добавьте в конец `.env` секцию из файла `.env.docker`:**
 
 ```dotenv
+# --- Swoole / Octane Configuration ---
+OCTANE_SERVER=swoole
+OCTANE_STATE_FILE=/var/www/laravel/storage/framework/octane-server-state.json
+SWOOLE_WORKERS=2
+SWOOLE_TASK_WORKERS=2
+SWOOLE_MAX_REQUESTS=250
+
 # --- pgAdmin Web Interface ---
 PGADMIN_DEFAULT_EMAIL=admin@example.com
 PGADMIN_DEFAULT_PASSWORD=admin
@@ -128,11 +124,6 @@ PGADMIN_PORT=8080
 XDEBUG_MODE=off
 XDEBUG_START=no
 XDEBUG_CLIENT_HOST=host.docker.internal
-
-# --- Swoole / Octane Configuration ---
-SWOOLE_WORKERS=2
-SWOOLE_TASK_WORKERS=2
-SWOOLE_MAX_REQUESTS=250
 ```
 
 ### 5. Инициализация проекта
@@ -186,19 +177,30 @@ make up
 
 ### Настройка `.env.production`
 
-Создайте production-файл из шаблона:
+Для локального запуска production-окружения через `make up-prod` создайте файл `.env.production` из шаблона:
 
 ```bash
 cp .env.production.example .env.production
 ```
 
+Этот файл используется для запуска `docker-compose.prod.local.yml`.
+
 Проверьте и заполните в `.env.production` production-значения:
 
 ```dotenv
+APP_NAME=LaravelSwoole
 APP_ENV=production
 APP_DEBUG=false
 APP_KEY=base64:your-generated-key
 APP_URL=https://your-domain.com
+APP_BASE_PATH=/var/www/laravel
+APP_LOCALE=en
+APP_FALLBACK_LOCALE=en
+APP_FAKER_LOCALE=en_US
+
+LOG_CHANNEL=stack
+LOG_STACK=single
+LOG_LEVEL=info
 
 DB_CONNECTION=pgsql
 DB_HOST=laravel-postgres-sw
@@ -207,19 +209,27 @@ DB_DATABASE=your_db
 DB_USERNAME=your_user
 DB_PASSWORD=<strong_password>
 
+SESSION_DRIVER=redis
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=null
+
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=local
+
 REDIS_CLIENT=phpredis
 REDIS_HOST=laravel-redis-sw
 REDIS_PORT=6379
-REDIS_PASSWORD=
-
-SESSION_DRIVER=redis
-CACHE_STORE=redis
-QUEUE_CONNECTION=redis
+REDIS_PASSWORD=<strong_password>
 
 OCTANE_SERVER=swoole
-SWOOLE_WORKERS=8
-SWOOLE_TASK_WORKERS=4
-SWOOLE_MAX_REQUESTS=500
+OCTANE_STATE_FILE=/var/www/laravel/storage/framework/octane-server-state.json
+SWOOLE_WORKERS=2
+SWOOLE_TASK_WORKERS=2
+SWOOLE_MAX_REQUESTS=200
 ```
 
 `APP_DEBUG=false` обязателен для production.  
@@ -230,7 +240,14 @@ SWOOLE_MAX_REQUESTS=500
 После создания проекта в Dokploy:
 
 1. Перейдите в раздел **Environment -> Environment Settings**.
-2. Скопируйте **все** переменные из `.env.production`.
+2. Добавьте в **Environment -> Environment Settings** **все** переменные из файла `.env.production`, кроме:
+
+```dotenv
+# Локальный порт для `make up-prod`
+APP_PORT=8050
+```
+
+`APP_PORT` используется только для локального запуска production-окружения через `make up-prod`.
 3. Для Preview-развертываний (если используются) измените переменные БД (например, добавьте префикс к имени БД), чтобы preview не затрагивал production-базу.
 4. В настройках развертывания укажите команду Post-deployment:
     - `php artisan migrate --force && php artisan optimize:clear`

@@ -3,7 +3,7 @@
 # ==========================================
 .PHONY: \
 	help check-files check-files-prod \
-	up up-prod down down-prod restart build rebuild \
+	up up-prod down down-prod restart build rebuild rebuild-prod \
 	logs logs-prod logs-app logs-app-prod logs-postgres logs-postgres-prod logs-pgadmin logs-node logs-redis logs-redis-prod logs-queue logs-queue-prod logs-scheduler logs-scheduler-prod \
 	status \
 	shell shell-prod shell-node shell-postgres shell-postgres-prod shell-redis shell-redis-prod shell-queue shell-queue-prod shell-scheduler shell-scheduler-prod \
@@ -13,7 +13,7 @@
 	artisan composer migrate rollback fresh tinker test-php \
 	swoole-reload swoole-status \
 	permissions info validate \
-	clean clean-all dev-reset
+	clean clean-all dev-reset clean-prod clean-all-prod prod-reset
 
 # Цвета для вывода
 YELLOW=\033[0;33m
@@ -83,6 +83,9 @@ build: ## Собрать образы (Dev)
 
 rebuild: ## Пересобрать образы без кэша (Dev)
 	$(COMPOSE) build --no-cache
+
+rebuild-prod: ## Пересобрать prod образы без кэша
+	$(COMPOSE_PROD) build --no-cache
 
 logs: ## Показать логи всех сервисов
 	$(COMPOSE) logs -f
@@ -278,16 +281,28 @@ validate: ## Проверить доступность сервисов по HTT
 	@echo "$(YELLOW)Статус контейнеров:$(NC)"
 	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
-clean: ## Удалить контейнеры и тома
+clean: ## Удалить контейнеры и тома (Dev)
 	$(COMPOSE) down -v
 	@echo "$(RED)! Контейнеры и данные БД удалены$(NC)"
 
-clean-all: ## Полная очистка (контейнеры, образы, тома)
-	@echo "$(YELLOW)Полная очистка...$(NC)"
+clean-all: ## Полная очистка dev (контейнеры, образы, тома)
+	@echo "$(YELLOW)Полная очистка dev...$(NC)"
 	$(COMPOSE) down -v --rmi all
-	@echo "$(GREEN)✓ Выполнена полная очистка$(NC)"
+	@echo "$(GREEN)✓ Выполнена полная очистка dev$(NC)"
 
 dev-reset: clean-all build up ## Сброс среды разработки
 	@echo "$(GREEN)✓ Среда разработки сброшена и перезапущена!$(NC)"
+
+clean-prod: ## Удалить prod контейнеры и тома
+	$(COMPOSE_PROD) down -v
+	@echo "$(RED)! Prod контейнеры и данные БД удалены$(NC)"
+
+clean-all-prod: ## Полная очистка prod (контейнеры, образы, тома)
+	@echo "$(YELLOW)Полная очистка prod...$(NC)"
+	$(COMPOSE_PROD) down -v --rmi all
+	@echo "$(GREEN)✓ Выполнена полная очистка prod$(NC)"
+
+prod-reset: clean-all-prod rebuild-prod up-prod ## Сброс prod среды
+	@echo "$(GREEN)✓ Prod среда сброшена и перезапущена!$(NC)"
 
 .DEFAULT_GOAL := help

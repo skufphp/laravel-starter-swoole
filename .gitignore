@@ -1,23 +1,33 @@
+# Logs
+*.log
+
 # Dependencies
 /vendor/
 /node_modules/
 
 # Environment
 .env
-.env.backup
 .env.production
 !.env.docker
 
 # Laravel Framework
 /public/build/
-/public/hot/
+/public/hot
 /public/storage
-/storage/*.key
+
 /storage/framework/cache/
 /storage/framework/sessions/
 /storage/framework/testing/
 /storage/framework/views/
-/storage/logs/
+/storage/framework/octane-server-state.json
+
+/storage/*.key
+/storage/oauth-*.key
+
+!/storage/.gitignore
+
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
 
 # Testing
 /.phpunit.cache
@@ -37,8 +47,6 @@ Thumbs.db
 
 # Misc
 auth.json
-Homestead.json
-Homestead.yaml
 npm-debug.log
 yarn-error.log
 
