@@ -9,9 +9,9 @@ services:
     ports:
       - "${APP_PORT:-8000}:8000"
     environment:
-      OCTANE_WORKERS: ${OCTANE_WORKERS:-2}
-      OCTANE_TASK_WORKERS: ${OCTANE_TASK_WORKERS:-2}
-      OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-250}
+      SWOOLE_WORKERS: ${SWOOLE_WORKERS:-2}
+      SWOOLE_TASK_WORKERS: ${SWOOLE_TASK_WORKERS:-2}
+      SWOOLE_MAX_REQUESTS: ${SWOOLE_MAX_REQUESTS:-250}
     command: [ "php", "artisan", "octane:start", "--server=swoole", "--host=0.0.0.0", "--port=8000" ]
     depends_on:
       laravel-postgres-sw:

@@ -3,11 +3,16 @@
 # ==============================================================================
 # Назначение:
 # - Сборка фронтенда (Node.js)
-# - Базовая среда PHP с расширением Swoole
+# - Базовая среда PHP с Swoole
 # - Поддержка Xdebug для разработки
 # - Оптимизированный Production образ
 #
 # Context: корень проекта (.)
+# Stages:
+#   frontend-build — сборка фронтенд-ассетов
+#   php-base       — общая база: PHP, ext, Swoole, composer (без php.ini, USER, CMD)
+#   development    — dev-среда: php.ini, USER, CMD
+#   production     — prod-образ: php.prod.ini, код, vendor, USER, CMD
 # ==============================================================================
 
 FROM node:24-alpine AS frontend-build
@@ -22,12 +27,15 @@ RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY . ./
 RUN npm run build
 
-# ==============================================================================
+# ====================================================================================
 # Базовая среда PHP с Swoole — используется для разработки и как основа для продакшена
-# ==============================================================================
+# ====================================================================================
 FROM phpswoole/swoole:php8.5-alpine AS php-base
 
-# 1) Зависимости времени выполнения + Зависимости для сборки (удалим после компиляции)
+# PIE (PHP Installer for Extensions) + Xdebug (только для разработки)
+COPY --from=ghcr.io/php/pie:bin /pie /usr/bin/pie
+
+# Зависимости времени выполнения + Зависимости для сборки (удалим после компиляции)
 RUN set -eux; \
     apk add --no-cache \
       curl git zip unzip \
@@ -39,7 +47,7 @@ RUN set -eux; \
       postgresql-dev libxml2-dev oniguruma-dev \
       openssl-dev c-ares-dev curl-dev
 
-# 2) PHP расширения
+# PHP расширения
 RUN set -eux; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
     docker-php-ext-install -j"$(nproc)" \
@@ -53,10 +61,9 @@ RUN set -eux; \
       zip \
       intl \
       sockets \
-      pcntl
-
-# 3) PIE (PHP Installer for Extensions) + Xdebug (только для разработки)
-COPY --from=ghcr.io/php/pie:bin /pie /usr/bin/pie
+      pcntl; \
+    pie install phpredis/phpredis; \
+    docker-php-ext-enable redis
 
 ARG INSTALL_XDEBUG=false
 RUN set -eux; \
@@ -65,15 +72,12 @@ RUN set -eux; \
       docker-php-ext-enable xdebug; \
     fi
 
-# 5) Очистка временных файлов
+# Очистка временных файлов
 RUN set -eux; \
     apk del .build-deps; \
     rm -rf /tmp/pear ~/.pearrc /var/cache/apk/*
 
-# 6) Конфигурация php.ini (dev по умолчанию, prod переопределяется в production stage)
-COPY docker/php/php.ini /usr/local/etc/php/conf.d/local.ini
-
-# 7) Установка Composer
+# Установка Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/laravel
@@ -87,6 +91,14 @@ RUN addgroup -g 82 -S www-data 2>/dev/null || true; \
 STOPSIGNAL SIGTERM
 
 EXPOSE 8000
+
+# ==============================================================================
+# Development образ: dev php.ini, монтируется volume с кодом хоста
+# ==============================================================================
+FROM php-base AS development
+
+# Конфигурация php.ini (dev по умолчанию, prod переопределяется в production stage)
+COPY docker/php/php.ini /usr/local/etc/php/conf.d/local.ini
 
 USER www-data
 
@@ -112,18 +124,21 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --no-script
 # Копируем весь проект
 COPY . ./
 
+# Удаляем public/hot, чтобы отключить Vite dev-server режим в production
+RUN rm -f public/hot
+
 # Копируем собранные ассеты из frontend-build
 COPY --from=frontend-build /app/public/build /var/www/laravel/public/build
 
-# Финализация composer (post-install scripts)
-RUN composer dump-autoload --optimize --no-dev
-
-# Кешируем конфигурацию, маршруты и представления Laravel
-RUN php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache \
-    && php artisan event:cache
+# Удаляем dev-кеши, скопированные с хоста
+# Перегенерируем autoload и запускаем package:discover один раз
+RUN rm -rf bootstrap/cache/*.php \
+    && rm -rf storage/framework/cache/data/* \
+    && composer dump-autoload --optimize --no-dev --classmap-authoritative --no-scripts \
+    && php artisan package:discover --ansi
 
 # Назначаем права и переключаемся на www-data
 RUN chown -R www-data:www-data /var/www/laravel
 USER www-data
+
+CMD ["php", "artisan", "octane:start", "--server=swoole", "--host=0.0.0.0", "--port=8000"]

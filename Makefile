@@ -1,7 +1,19 @@
 # ==========================================
 # Laravel Octane + Swoole (Boilerplate)
 # ==========================================
-.PHONY: help up down restart build rebuild logs status shell shell-postgres clean setup artisan migrate
+.PHONY: \
+	help check-files check-files-prod \
+	up up-prod down down-prod restart build rebuild \
+	logs logs-prod logs-app logs-app-prod logs-postgres logs-postgres-prod logs-pgadmin logs-node logs-redis logs-redis-prod logs-queue logs-queue-prod logs-scheduler logs-scheduler-prod \
+	status \
+	shell shell-prod shell-node shell-postgres shell-postgres-prod shell-redis shell-redis-prod shell-queue shell-queue-prod shell-scheduler shell-scheduler-prod \
+	setup install-deps \
+	composer-install composer-update composer-require \
+	npm-install npm-dev npm-build \
+	artisan composer migrate rollback fresh tinker test-php \
+	swoole-reload swoole-status \
+	permissions info validate \
+	clean clean-all dev-reset
 
 # Цвета для вывода
 YELLOW=\033[0;33m
@@ -9,10 +21,14 @@ GREEN=\033[0;32m
 RED=\033[0;31m
 NC=\033[0m
 
-# Переменные Compose (используем merge для разработки)
-COMPOSE_DEV = docker compose -f docker-compose.yml -f docker-compose.dev.yml
-COMPOSE_PROD = docker compose -f docker-compose.yml -f docker-compose.prod.yml
-COMPOSE = $(COMPOSE_DEV)
+# Переменные Compose
+COMPOSE = docker compose -f docker-compose.yml
+COMPOSE_PROD = docker compose --env-file .env.production -f docker-compose.prod.local.yml
+
+APP_PORT := $(shell grep '^APP_PORT=' .env 2>/dev/null | cut -d '=' -f 2- | tr -d '[:space:]')
+ifeq ($(APP_PORT),)
+APP_PORT := 8050
+endif
 
 # Сервисы (имена сервисов из compose-файлов)
 APP_SERVICE=laravel-swoole
@@ -20,7 +36,8 @@ POSTGRES_SERVICE=laravel-postgres-sw
 REDIS_SERVICE=laravel-redis-sw
 PGADMIN_SERVICE=laravel-pgadmin-sw
 NODE_SERVICE=laravel-node-sw
-INIT_SERVICE=laravel-init
+QUEUE_SERVICE=laravel-queue-sw
+SCHEDULER_SERVICE=laravel-scheduler-sw
 
 help: ## Показать справку
 	@echo "$(YELLOW)Laravel Octane + Swoole Docker Boilerplate$(NC)"
@@ -30,23 +47,33 @@ help: ## Показать справку
 check-files: ## Проверить наличие всех необходимых файлов
 	@echo "$(YELLOW)Проверка файлов конфигурации...$(NC)"
 	@test -f docker-compose.yml || (echo "$(RED)✗ docker-compose.yml не найден$(NC)" && exit 1)
-	@test -f docker-compose.dev.yml || (echo "$(RED)✗ docker-compose.dev.yml не найден$(NC)" && exit 1)
 	@test -f docker-compose.prod.yml || (echo "$(RED)✗ docker-compose.prod.yml не найден$(NC)" && exit 1)
 	@test -f .env || (echo "$(RED)✗ .env не найден. Убедитесь, что вы настроили проект Laravel$(NC)" && exit 1)
 	@test -f docker/php.Dockerfile || (echo "$(RED)✗ docker/php.Dockerfile не найден$(NC)" && exit 1)
 	@test -f docker/php/php.ini || (echo "$(RED)✗ docker/php/php.ini не найден$(NC)" && exit 1)
 	@echo "$(GREEN)✓ Все файлы на месте$(NC)"
 
+check-files-prod: ## Проверить наличие всех необходимых файлов
+	@echo "$(YELLOW)Проверка файлов конфигурации...$(NC)"
+	@test -f docker-compose.prod.local.yml || (echo "$(RED)✗ docker-compose.prod.local.yml не найден$(NC)" && exit 1)
+	@test -f .env.production || (echo "$(RED)✗ .env.production не найден. Создайте его из .env.production.example$(NC)" && exit 1)
+	@test -f docker/php.Dockerfile || (echo "$(RED)✗ docker/php.Dockerfile не найден$(NC)" && exit 1)
+	@test -f docker/php/php.ini || (echo "$(RED)✗ docker/php/php.ini не найден$(NC)" && exit 1)
+	@echo "$(GREEN)✓ Все файлы на месте$(NC)"
+
 up: check-files ## Запустить контейнеры (Dev)
 	$(COMPOSE) up -d
-	@echo "$(GREEN)✓ Проект запущен на http://localhost:8000$(NC)"
+	@echo "$(GREEN)✓ Проект запущен на http://localhost:$(APP_PORT)$(NC)"
 
-up-prod: check-files ## Запустить контейнеры (Prod)
+up-prod: check-files-prod ## Запустить контейнеры (Prod)
 	$(COMPOSE_PROD) up -d
 	@echo "$(GREEN)✓ Проект (Prod) запущен$(NC)"
 
 down: ## Остановить контейнеры
 	$(COMPOSE) down
+
+down-prod: ## Остановить контейнеры (Prod)
+	$(COMPOSE_PROD) down
 
 restart: ## Перезапустить контейнеры
 	$(COMPOSE) restart
@@ -60,11 +87,20 @@ rebuild: ## Пересобрать образы без кэша (Dev)
 logs: ## Показать логи всех сервисов
 	$(COMPOSE) logs -f
 
+logs-prod: ## Показать логи всех сервисов (Prod)
+	$(COMPOSE_PROD) logs -f
+
 logs-app: ## Просмотр логов Swoole
 	$(COMPOSE) logs -f $(APP_SERVICE)
 
+logs-app-prod: ## Просмотр логов Swoole (Prod)
+	$(COMPOSE_PROD) logs -f $(APP_SERVICE)
+
 logs-postgres: ## Просмотр логов PostgreSQL
 	$(COMPOSE) logs -f $(POSTGRES_SERVICE)
+
+logs-postgres-prod: ## Просмотр логов PostgreSQL (Prod)
+	$(COMPOSE_PROD) logs -f $(POSTGRES_SERVICE)
 
 logs-pgadmin: ## Просмотр логов pgAdmin
 	$(COMPOSE) logs -f $(PGADMIN_SERVICE)
@@ -75,14 +111,44 @@ logs-node: ## Просмотр логов Node (HMR)
 logs-redis: ## Просмотр логов Redis
 	$(COMPOSE) logs -f $(REDIS_SERVICE)
 
+logs-redis-prod: ## Просмотр логов Redis (Prod)
+	$(COMPOSE_PROD) logs -f $(REDIS_SERVICE)
+
+logs-queue: ## Просмотр логов Queue Worker (Dev)
+	$(COMPOSE) logs -f $(QUEUE_SERVICE)
+
+logs-queue-prod: ## Просмотр логов Queue Worker (Prod)
+	$(COMPOSE_PROD) logs -f $(QUEUE_SERVICE)
+
+logs-scheduler: ## Просмотр логов Scheduler (Dev)
+	$(COMPOSE) logs -f $(SCHEDULER_SERVICE)
+
+logs-scheduler-prod: ## Просмотр логов Scheduler (Prod)
+	$(COMPOSE_PROD) logs -f $(SCHEDULER_SERVICE)
+
 status: ## Статус контейнеров
 	$(COMPOSE) ps
 
 shell: ## Войти в контейнер приложения (Swoole)
 	$(COMPOSE) exec $(APP_SERVICE) sh
 
+shell-prod: ## Войти в контейнер приложения (Prod)
+	$(COMPOSE_PROD) exec $(APP_SERVICE) sh
+
 shell-node: ## Подключиться к контейнеру Node
 	$(COMPOSE) exec $(NODE_SERVICE) sh
+
+shell-queue: ## Войти в контейнер Queue Worker
+	$(COMPOSE) exec $(QUEUE_SERVICE) sh
+
+shell-queue-prod: ## Войти в контейнер Queue Worker (Prod)
+	$(COMPOSE_PROD) exec $(QUEUE_SERVICE) sh
+
+shell-scheduler: ## Войти в контейнер Scheduler
+	$(COMPOSE) exec $(SCHEDULER_SERVICE) sh
+
+shell-scheduler-prod: ## Войти в контейнер Scheduler (Prod)
+	$(COMPOSE_PROD) exec $(SCHEDULER_SERVICE) sh
 
 shell-postgres: ## Подключиться к PostgreSQL CLI
 	@echo "$(YELLOW)Подключение к базе...$(NC)"
@@ -90,34 +156,34 @@ shell-postgres: ## Подключиться к PostgreSQL CLI
 	DB_NAME=$$(grep '^DB_DATABASE=' .env | cut -d '=' -f 2- | tr -d '[:space:]'); \
 	$(COMPOSE) exec $(POSTGRES_SERVICE) psql -U $$DB_USER -d $$DB_NAME
 
+shell-postgres-prod: ## Подключиться к PostgreSQL CLI (Prod)
+	@echo "$(YELLOW)Подключение к базе (Prod)...$(NC)"
+	@DB_USER=$$(grep '^DB_USERNAME=' .env.production | cut -d '=' -f 2- | tr -d '[:space:]'); \
+	DB_NAME=$$(grep '^DB_DATABASE=' .env.production | cut -d '=' -f 2- | tr -d '[:space:]'); \
+	$(COMPOSE_PROD) exec $(POSTGRES_SERVICE) psql -U $$DB_USER -d $$DB_NAME
+
 shell-redis: ## Подключиться к Redis CLI
 	@echo "$(YELLOW)Подключение к Redis...$(NC)"
 	$(COMPOSE) exec $(REDIS_SERVICE) redis-cli ping
 
+shell-redis-prod: ## Подключиться к Redis CLI (Prod)
+	@echo "$(YELLOW)Подключение к Redis (Prod)...$(NC)"
+	$(COMPOSE_PROD) exec $(REDIS_SERVICE) redis-cli ping
+
 # --- Команды Laravel ---
 
-setup: check-files ## Полная инициализация проекта с нуля (build → infra → init → app)
-	@echo "$(YELLOW)1/5 Сборка образов...$(NC)"
+setup: ## Полная инициализация проекта с нуля
 	@make build
-	@echo "$(YELLOW)2/5 Запуск инфраструктуры (PostgreSQL, Redis, pgAdmin)...$(NC)"
-	@$(COMPOSE) up -d $(POSTGRES_SERVICE) $(REDIS_SERVICE) $(PGADMIN_SERVICE)
-	@echo "$(YELLOW)3/5 Ожидание готовности сервисов...$(NC)"
+	@make up
+	@echo "$(YELLOW)Ожидание готовности PostgreSQL...$(NC)"
 	@$(COMPOSE) exec $(POSTGRES_SERVICE) sh -c 'until pg_isready; do sleep 1; done'
+	@echo "$(YELLOW)Ожидание готовности Redis...$(NC)"
 	@$(COMPOSE) exec $(REDIS_SERVICE) sh -c 'until redis-cli ping | grep -q PONG; do sleep 1; done'
-	@echo "$(YELLOW)4/5 Инициализация проекта (composer, key, migrate)...$(NC)"
-	@make init
-	@echo "$(YELLOW)5/5 Запуск приложения (Octane + Swoole) и Node (Vite)...$(NC)"
-	@$(COMPOSE) up -d $(APP_SERVICE) $(NODE_SERVICE)
-	@echo ""
-	@echo "$(GREEN)✓ Проект готов!$(NC)"
-	@echo "  • Приложение: http://localhost:8000"
-	@echo "  • pgAdmin:    http://localhost:8080"
-	@echo "  • Vite HMR:   http://localhost:5173"
-
-init: ## Инициализация проекта (composer install, key, migrate) через init-job
-	@echo "$(YELLOW)Запуск init-job...$(NC)"
-	@$(COMPOSE) run --rm $(INIT_SERVICE)
-	@echo "$(GREEN)✓ Инициализация завершена$(NC)"
+	@make install-deps
+	@make artisan CMD="key:generate"
+	@make migrate
+	@make permissions
+	@echo "$(GREEN)✓ Проект готов: http://localhost:$(APP_PORT)$(NC)"
 
 install-deps: ## Установка всех зависимостей (Composer + NPM)
 	@echo "$(YELLOW)Установка зависимостей...$(NC)"
@@ -169,10 +235,10 @@ test-php: ## Запустить тесты PHP (PHPUnit)
 
 # --- Swoole / Octane ---
 
-octane-reload: ## Перезагрузить воркеры Swoole Octane (без перезапуска контейнера)
+swoole-reload: ## Перезагрузить воркеры Swoole Octane (без перезапуска контейнера)
 	$(COMPOSE) exec $(APP_SERVICE) php artisan octane:reload
 
-octane-status: ## Показать статус Swoole Octane
+swoole-status: ## Показать статус Swoole Octane
 	$(COMPOSE) exec $(APP_SERVICE) php artisan octane:status
 
 # --- Утилиты ---
@@ -186,7 +252,7 @@ info: ## Показать информацию о проекте
 	@echo "$(YELLOW)Laravel Octane + Swoole Development Environment$(NC)"
 	@echo "======================================"
 	@echo "$(GREEN)Сервисы:$(NC)"
-	@echo "  • PHP 8.4 CLI + Swoole (Alpine)"
+	@echo "  • PHP 8.5 CLI + Swoole (Alpine)"
 	@echo "  • PostgreSQL 18.2"
 	@echo "  • Redis"
 	@echo "  • pgAdmin 4 (dev only)"
@@ -197,7 +263,7 @@ info: ## Показать информацию о проекте
 	@echo "  • .env              - единый файл настроек (Laravel + Docker)"
 	@echo ""
 	@echo "$(GREEN)Порты:$(NC)"
-	@echo "  • 8000 - Swoole Octane (HTTP Server)"
+	@echo "  • $(APP_PORT) - Swoole Octane (HTTP Server)"
 	@echo "  • 5173 - Vite HMR (dev only)"
 	@echo "  • 5432 - PostgreSQL (dev forwarded)"
 	@echo "  • 6379 - Redis (dev forwarded)"
@@ -205,8 +271,8 @@ info: ## Показать информацию о проекте
 
 validate: ## Проверить доступность сервисов по HTTP
 	@echo "$(YELLOW)Проверка работы сервисов...$(NC)"
-	@echo -n "Swoole Octane (http://localhost:8000): "
-	@curl -s -o /dev/null -w "%{http_code}" http://localhost:8000 && echo " $(GREEN)✓$(NC)" || echo " $(RED)✗$(NC)"
+	@echo -n "Swoole Octane (http://localhost:$(APP_PORT)): "
+	@curl -s -o /dev/null -w "%{http_code}" http://localhost:$(APP_PORT) && echo " $(GREEN)✓$(NC)" || echo " $(RED)✗$(NC)"
 	@echo -n "pgAdmin (http://localhost:8080): "
 	@curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 && echo " $(GREEN)✓$(NC)" || echo " $(RED)✗$(NC)"
 	@echo "$(YELLOW)Статус контейнеров:$(NC)"
