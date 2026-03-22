@@ -58,7 +58,7 @@ check-files-prod: ## Проверить наличие всех необходи
 	@test -f docker-compose.prod.local.yml || (echo "$(RED)✗ docker-compose.prod.local.yml не найден$(NC)" && exit 1)
 	@test -f .env.production || (echo "$(RED)✗ .env.production не найден. Создайте его из .env.production.example$(NC)" && exit 1)
 	@test -f docker/php.Dockerfile || (echo "$(RED)✗ docker/php.Dockerfile не найден$(NC)" && exit 1)
-	@test -f docker/php/php.ini || (echo "$(RED)✗ docker/php/php.ini не найден$(NC)" && exit 1)
+	@test -f docker/php/php.prod.ini || (echo "$(RED)✗ docker/php/php.prod.ini не найден$(NC)" && exit 1)
 	@echo "$(GREEN)✓ Все файлы на месте$(NC)"
 
 up: check-files ## Запустить контейнеры (Dev)
