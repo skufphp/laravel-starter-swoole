@@ -65,13 +65,6 @@ RUN set -eux; \
     pie install phpredis/phpredis; \
     docker-php-ext-enable redis
 
-ARG INSTALL_XDEBUG=false
-RUN set -eux; \
-    if [ "${INSTALL_XDEBUG}" = "true" ]; then \
-      pie install xdebug/xdebug; \
-      docker-php-ext-enable xdebug; \
-    fi
-
 # Очистка временных файлов
 RUN set -eux; \
     apk del .build-deps; \
@@ -96,6 +89,13 @@ EXPOSE 8000
 # Development образ: dev php.ini, монтируется volume с кодом хоста
 # ==============================================================================
 FROM php-base AS development
+
+ARG INSTALL_XDEBUG=false
+RUN set -eux; \
+    if [ "${INSTALL_XDEBUG}" = "true" ]; then \
+      pie install xdebug/xdebug; \
+      docker-php-ext-enable xdebug; \
+    fi
 
 # Конфигурация php.ini (dev по умолчанию, prod переопределяется в production stage)
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/local.ini
