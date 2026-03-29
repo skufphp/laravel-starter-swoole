@@ -58,8 +58,8 @@ services:
     working_dir: /var/www/laravel
     command: >
       sh -c "
-        php artisan migrate --force &&
         php artisan optimize:clear &&
+        php artisan migrate --force &&
         php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000
       "
     networks:
@@ -128,6 +128,8 @@ services:
     networks:
       - laravel-swoole-network
     depends_on:
+      laravel-swoole:
+        condition: service_started
       laravel-postgres-sw:
         condition: service_healthy
       laravel-redis-sw:
@@ -148,10 +150,12 @@ services:
     environment:
       <<: *laravel-env
     working_dir: /var/www/laravel
-    command: [ "sh", "-c", "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done" ]
+    command: [ "php", "artisan", "schedule:work" ]
     networks:
       - laravel-swoole-network
     depends_on:
+      laravel-swoole:
+        condition: service_started
       laravel-postgres-sw:
         condition: service_healthy
       laravel-redis-sw:

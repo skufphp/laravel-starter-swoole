@@ -1,131 +1,71 @@
-# Laravel Octane + Swoole — Docker Boilerplate
+# Laravel Boilerplate (Laravel Octane + Swoole + PostgreSQL + Redis)
 
-Boilerplate для быстрого развертывания **Laravel Octane** на **Swoole** в Docker.
+Этот репозиторий представляет собой **универсальный boilerplate** для развертывания Laravel-проектов с использованием **Laravel Octane** и **Swoole** в Docker-окружении.
 
-## Архитектура
+## 🚀 Основные возможности
 
-```
-┌─────────────────────────────────────────────────┐
-│              Docker Compose                      │
-│                                                  │
-│  ┌──────────────────────┐   ┌────────────────┐  │
-│  │  Swoole (PHP 8.5)    │   │  PostgreSQL    │  │
-│  │  Laravel Octane       │   │  18.2 Alpine   │  │
-│  │  :8000 HTTP           │   │  :5432         │  │
-│  │  :2114 Health Check   │   └────────────────┘  │
-│  └──────────────────────┘                        │
-│                              ┌────────────────┐  │
-│  ┌──────────────────────┐   │  Redis          │  │
-│  │  Node.js (dev only)  │   │  8.6 Alpine     │  │
-│  │  Vite HMR :5173      │   │  :6379          │  │
-│  │  └───────────────────┘   └────────────────┘  │
-│                                                  │
-│  ┌──────────────────────┐                        │
-│  │  pgAdmin (dev only)  │                        │
-│  │  :8080               │                        │
-│  └──────────────────────┘                        │
-└─────────────────────────────────────────────────┘
-```
+*   **Высокая производительность:** Приложение работает через **Swoole HTTP Server** без отдельного Nginx/Apache и без повторного bootstrap Laravel на каждый запрос.
+*   **Современный стек:**
+    *   **PHP 8.5 (Alpine)** — свежая версия PHP с готовым runtime для Laravel Octane.
+    *   **Swoole** — встроенный HTTP-сервер и менеджер persistent workers + coroutines для Octane.
+    *   **PostgreSQL 18.2** — основная база данных.
+    *   **Redis 8.6** — кеш, очереди и сессии.
+    *   **Node.js 24** — для сборки фронтенда (Vite) с поддержкой Hot Module Replacement (HMR).
+*   **Разделение окружений:** Готовые конфигурации для **Development** (монтирование кода, HMR, pgAdmin) и **Production** (multi-stage сборка, immutable image, отдельные queue/scheduler-сервисы).
+*   **Инструменты разработки:**
+    *   **pgAdmin 4** — веб-интерфейс для PostgreSQL (только в dev).
+    *   **Xdebug** — предустановлен и включается через `.env`.
+    *   **Makefile** — автоматизация сборки, запуска, логов, artisan-команд и операций Swoole Octane.
+*   **Production Ready:** Отдельные compose-конфигурации для локального production-запуска и дальнейшей интеграции в CI/CD или Dokploy.
 
-## Ключевые отличия от Nginx + PHP-FPM
+## 📂 Структура проекта
 
-| Аспект             | Nginx + PHP-FPM       | Swoole (Octane)                          |
-|--------------------|-----------------------|------------------------------------------|
-| Контейнеры         | 2 (Nginx + PHP-FPM)   | 1 (Swoole)                               |
-| Протокол           | Unix socket / FastCGI | Встроенный HTTP-сервер                   |
-| Модель             | Процесс на запрос     | Persistent workers + coroutines          |
-| Производительность | Хорошая               | Высокая (нет bootstrap на каждый запрос) |
-| Статика            | Nginx                 | Reverse proxy (Caddy/Nginx) или Octane   |
-| Перезагрузка кода  | Автоматическая        | `make swoole-reload` или `--watch`       |
+*   `docker/` — Dockerfile и конфигурационные файлы PHP.
+*   `docker-compose.yml` — базовая конфигурация сервисов и разработка.
+*   `docker-compose.prod.yml` — прод-конфигурация сервисов.
+*   `docker-compose.prod.local.yml` — настройки для локального запуска продакшена.
+*   `Makefile` — главный пульт управления проектом.
 
-## Структура проекта (файлы boilerplate)
+## 🛠 Быстрый старт (Development)
 
-```
-├── docker/
-│   ├── php.Dockerfile          # Многоэтапный образ (dev + production)
-│   └── php/
-│       ├── php.ini             # Настройки PHP для разработки
-│       └── php.prod.ini        # Настройки PHP для продакшена
-├── docker-compose.yml          # Разработка (app, node, postgres, redis, queue, scheduler, pgadmin)
-├── docker-compose.prod.yml     # Продакшен-стек (app, postgres, redis, queue, scheduler)
-├── docker-compose.prod.local.yml # Локальный запуск production-стека через .env.production
-├── .dockerignore               # Исключения из контекста сборки
-├── .env.docker                 # Шаблон переменных окружения для Docker
-├── .env.production.example     # Шаблон переменных для production/локального prod-запуска
-├── Makefile                    # Команды управления проектом
-└── SETUP.md                    # Подробная инструкция по установке
-```
+1.  Клонируйте репозиторий в корень вашего Laravel-проекта.
+2.  Установите и настройте Laravel Octane под Swoole:
+    ```bash
+    composer require laravel/octane
+    php artisan octane:install
+    ```
+3.  Настройте файлы окружения:
+    ```bash
+    cp .env.example .env
+    ```
+    *(Убедитесь, что параметры БД, Redis и Octane в `.env` соответствуют именам сервисов в docker-compose.)*
+4.  Запустите полную инициализацию:
+    ```bash
+    make setup
+    ```
+    Эта команда соберет образы, запустит контейнеры, установит зависимости (Composer & NPM), создаст `APP_KEY`, выполнит миграции и настроит права доступа.
 
-## Быстрый старт
+## 💻 Основные команды (Makefile)
 
-```bash
-# 1. Создайте Laravel проект
-composer create-project laravel/laravel my-app
+*   `make up` — запустить проект в dev-режиме.
+*   `make up-prod` — запустить проект в prod-режиме локально.
+*   `make down` — остановить контейнеры.
+*   `make setup` — полная инициализация проекта.
+*   `make artisan CMD="migrate"` — выполнить artisan-команду.
+*   `make shell` — войти в консоль app-контейнера.
+*   `make shell-redis` — проверить доступность Redis.
+*   `make npm-dev` — подключиться к Vite dev server.
+*   `make swoole-reload` — перезагрузить воркеры Swoole после изменения PHP-кода.
+*   `make swoole-status` — проверить состояние Swoole Octane.
+*   `make info` — показать информацию о портах и сервисах.
+*   `make logs` — просмотр логов всех сервисов.
 
-# 2. Добавить Octane в зависимости (локально Swoole не нужен)
-cd my-app
-composer require laravel/octane
+## 🔗 Доступы (Default)
 
-# 3. Скопируйте файлы boilerplate в проект
-# (docker/, docker-compose*.yml, Makefile, .dockerignore, .env.production.example)
+*   **Web-сайт:** [http://localhost:8050](http://localhost:8050)
+*   **pgAdmin:** [http://localhost:8080](http://localhost:8080)
+*   **Postgres:** `localhost:5432` (снаружи, если не переопределено в `.env`)
+*   **Redis:** `localhost:6379` (снаружи, если не переопределено в `.env`)
 
-# 4. Настройте .env (см. SETUP.md)
-# Важно для Redis:
-# SESSION_DRIVER=redis
-# CACHE_STORE=redis
-# QUEUE_CONNECTION=redis
-# REDIS_CLIENT=phpredis
-
-# 5. Запустить
-make setup
-```
-
-Подробная инструкция — в файле **[SETUP.md](SETUP.md)**.
-
-## Локальный запуск production-стека
-
-```bash
-cp .env.production.example .env.production
-make up-prod
-```
-
-`make up-prod` использует `--env-file .env.production` и `docker-compose.prod.local.yml`.
-
-## Dokploy
-
-Пошаговый деплой для Dokploy описан в **[SETUP.md](SETUP.md)** (раздел `Развертывание в Dokploy`): перенос всех переменных из `.env.production` в секцию `Environment -> Environment Settings`, изоляция preview-БД и `Post-deployment` команда для миграций.
-
-## Основные команды
-
-| Команда                  | Описание                         |
-|--------------------------|----------------------------------|
-| `make setup`             | Полная инициализация проекта     |
-| `make up`                | Запустить контейнеры (dev)       |
-| `make up-prod`           | Запустить контейнеры (prod local)|
-| `make down`              | Остановить контейнеры            |
-| `make down-prod`         | Остановить контейнеры (prod local)|
-| `make logs`              | Логи всех сервисов (dev)         |
-| `make logs-prod`         | Логи всех сервисов (prod local)  |
-| `make logs-app`          | Логи Swoole                      |
-| `make logs-app-prod`     | Логи Swoole (prod local)         |
-| `make logs-postgres`     | Логи PostgreSQL (dev)            |
-| `make logs-postgres-prod`| Логи PostgreSQL (prod local)     |
-| `make logs-redis`        | Логи Redis (dev)                 |
-| `make logs-redis-prod`   | Логи Redis (prod local)          |
-| `make logs-queue`        | Логи queue worker (dev)          |
-| `make logs-queue-prod`   | Логи queue worker (prod local)   |
-| `make logs-scheduler`    | Логи scheduler (dev)             |
-| `make logs-scheduler-prod`| Логи scheduler (prod local)     |
-| `make shell`             | Войти в контейнер                |
-| `make shell-prod`        | Войти в app-контейнер (prod local)|
-| `make shell-postgres`    | PostgreSQL CLI (dev)             |
-| `make shell-postgres-prod`| PostgreSQL CLI (prod local)     |
-| `make shell-redis`       | Redis CLI (dev)                  |
-| `make shell-redis-prod`  | Redis CLI (prod local)           |
-| `make shell-queue-prod`  | Shell queue worker (prod local)  |
-| `make shell-scheduler-prod`| Shell scheduler (prod local)   |
-| `make swoole-reload`     | Перезагрузить воркеры Swoole     |
-| `make swoole-status`     | Статус воркеров                  |
-| `make artisan CMD="..."` | Выполнить artisan-команду        |
-| `make test-php`          | Запустить тесты                  |
-| `make help`              | Полный список команд             |
+---
+*Подробная инструкция по установке и настройке находится в [SETUP.md](SETUP.md).*

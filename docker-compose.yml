@@ -21,10 +21,13 @@ services:
       XDEBUG_MODE: ${XDEBUG_MODE:-off}
       XDEBUG_START: ${XDEBUG_START:-no}
       XDEBUG_CLIENT_HOST: ${XDEBUG_CLIENT_HOST:-host.docker.internal}
+      SWOOLE_WORKERS: ${SWOOLE_WORKERS:-2}
+      SWOOLE_TASK_WORKERS: ${SWOOLE_TASK_WORKERS:-2}
+      SWOOLE_MAX_REQUESTS: ${SWOOLE_MAX_REQUESTS:-250}
     networks:
       - laravel-swoole-network
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/up" ]
+      test: [ "CMD-SHELL", "curl --silent --show-error --fail --max-time 3 --noproxy '*' http://127.0.0.1:8000/up >/dev/null" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -112,6 +115,8 @@ services:
     networks:
       - laravel-swoole-network
     depends_on:
+      laravel-swoole:
+        condition: service_started
       laravel-postgres-sw:
         condition: service_healthy
       laravel-redis-sw:
@@ -132,10 +137,12 @@ services:
     working_dir: /var/www/laravel
     volumes:
       - .:/var/www/laravel
-    command: [ "sh", "-c", "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done" ]
+    command: [ "php", "artisan", "schedule:work" ]
     networks:
       - laravel-swoole-network
     depends_on:
+      laravel-swoole:
+        condition: service_started
       laravel-postgres-sw:
         condition: service_healthy
       laravel-redis-sw:
